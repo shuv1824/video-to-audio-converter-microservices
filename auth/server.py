@@ -1,8 +1,8 @@
 import jwt, datetime, os
 import sqlite3
-from flask import Flask, g, request, jsonify
+from flask import Flask, g, request
 
-app = Flask(__name__)
+server = Flask(__name__)
 
 
 def get_db_connection():
@@ -11,7 +11,7 @@ def get_db_connection():
     return conn
 
 
-@app.teardown_appcontext
+@server.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, "_database", None)
     if db is not None:
@@ -20,13 +20,13 @@ def close_connection(exception):
 
 def init_db():
     db = get_db_connection()
-    with app.open_resource("schema.sql", mode="r") as f:
+    with server.open_resource("schema.sql", mode="r") as f:
         db.cursor().executescript(f.read())
     db.commit()
     db.close()
 
 
-@app.route("/login", methods=["POST"])
+@server.route("/login", methods=["POST"])
 def login():
     auth = request.authorization
     if not auth:
@@ -35,7 +35,7 @@ def login():
     db = get_db_connection()
 
     user = db.execute(
-        "SELECT * FROM users WHERE username = ? AND password = ?",
+        "SELECT * FROM users WHERE email = ? AND password = ?",
         (auth.username, auth.password),
     ).fetchone()
 
@@ -44,17 +44,41 @@ def login():
     if user is None:
         return "Invalid credentials", 401
 
-    token = jwt.encode(
-        {
-            "user": user["username"],
-            "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=30),
-        },
-        app.config["SECRET_KEY"],
-    )
+    return create_jwt(auth.username, os.environ.get("JWT_SECRET"), True)
 
-    return jsonify({"token": token})
+
+@server.route("/validate", methods=["POST"])
+def validate():
+    encoded_jwt = request.headers["Authorization"]
+    if not encoded_jwt:
+        return "Missing credentials", 401
+
+    encoded_jwt = encoded_jwt.split(" ")[1]
+
+    try:
+        decoded = jwt.decode(
+            encoded_jwt, os.environ.get("JWT_SECRET"), algorithms=["HS256"]
+        )
+    except:
+        return "Not authorized", 403
+
+    return decoded, 200
+
+
+def create_jwt(username, secret, authz):
+    return jwt.encode(
+        {
+            "username": username,
+            "exp": datetime.datetime.now(datetime.timezone.utc)
+            + datetime.timedelta(days=1),
+            "iat": datetime.datetime.now(datetime.timezone.utc),
+            "authz": authz,
+        },
+        secret,
+        algorithm="HS256",
+    )
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
+    server.run(host="0.0.0.0", port=5000)

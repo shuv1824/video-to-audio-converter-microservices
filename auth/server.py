@@ -1,14 +1,23 @@
 import jwt, datetime, os
-import sqlite3
 from flask import Flask, g, request
+import psycopg2
 
 server = Flask(__name__)
 
+DB_CONFIG = {
+    "dbname": os.environ.get("DB_NAME"),
+    "user": os.environ.get("DB_USER"),
+    "password": os.environ.get("DB_PASSWORD"),
+    "host": os.environ.get("DB_HOST"),
+    "port": os.environ.get("DB_PORT"),
+}
+
 
 def get_db_connection():
-    conn = sqlite3.connect("auth.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+    db = getattr(g, "_database", None)
+    if db is None:
+        db = g._database = psycopg2.connect(**DB_CONFIG)
+    return db
 
 
 @server.teardown_appcontext

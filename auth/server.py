@@ -1,6 +1,10 @@
 import jwt, datetime, os
 from flask import Flask, g, request
+from dotenv import load_dotenv
+
 import psycopg2
+
+load_dotenv()
 
 server = Flask(__name__)
 
@@ -74,6 +78,22 @@ def validate():
     return decoded, 200
 
 
+@server.route("/check", methods=["GET"])
+def check():
+    try:
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute("SELECT 1;")
+        result = cursor.fetchone()
+        if result and result[0] == 1:
+            return "OK", 200
+        else:
+            return "Bad response", 500
+
+    except:
+        return "Internal server error", 500
+
+
 def create_jwt(username, secret, authz):
     return jwt.encode(
         {
@@ -89,5 +109,5 @@ def create_jwt(username, secret, authz):
 
 
 if __name__ == "__main__":
-    init_db()
+    # init_db()
     server.run(host="0.0.0.0", port=5000)

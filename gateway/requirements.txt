@@ -2,3 +2,4 @@ pika
 flask
 pyMongo
 Flask-PyMongo
+requests
